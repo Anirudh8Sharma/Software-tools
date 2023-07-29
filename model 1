@@ -1,0 +1,86 @@
+# Step 1: Setup
+!pip install transformers[torch]
+
+!pip install datasets
+!pip install accelerate>=0.20.1
+
+
+
+# Step 2: Mount Google Drive to access your data (For Google Colab)
+from google.colab import drive
+drive.mount('/content/drive')
+
+# Step 3: Prepare Your Data
+from datasets import load_dataset
+dataset = load_dataset('text', data_files={'train': '/content/drive/MyDrive/sherlock.txt'})
+
+dataset = dataset["train"].train_test_split(test_size=0.1)
+
+# Step 4: Tokenization
+from transformers import GPT2TokenizerFast
+tokenizer = GPT2TokenizerFast.from_pretrained('gpt2')
+
+# Set padding token if not already set
+if tokenizer.pad_token is None:
+    tokenizer.pad_token = tokenizer.eos_token
+
+def tokenize_function(examples):
+    # Note that here 'text' represents the column name in your dataset containing the text
+    tokenized_examples = tokenizer(examples["text"], truncation=True, padding='max_length')
+
+    # For language modeling, labels are the same as inputs except for special tokens
+    tokenized_examples["labels"] = tokenized_examples["input_ids"].copy()
+
+    return tokenized_examples
+
+dataset = dataset.map(tokenize_function, batched=True)
+
+# Step 5: Model Preparation
+from transformers import GPT2LMHeadModel
+model = GPT2LMHeadModel.from_pretrained('gpt2')
+
+# Step 6: Training
+from transformers import TrainingArguments, Trainer
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="transformers")
+
+training_args = TrainingArguments(
+    output_dir="./results",
+    overwrite_output_dir=True,
+    num_train_epochs=3,
+    per_device_train_batch_size=1,
+    save_steps=10_000,
+    save_total_limit=2,
+)
+
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=dataset["train"],
+    eval_dataset=dataset["test"],
+)
+
+trainer.train()
+
+# Save the model with a new name
+trainer.save_model("/content/drive/MyDrive/my_new_model_tuned")
+
+# Step 7: Testing
+from transformers import GPT2LMHeadModel, GPT2Tokenizer, pipeline
+
+# Load the fine-tuned model
+model = GPT2LMHeadModel.from_pretrained('/content/drive/MyDrive/my_new_model_tuned')
+
+# Load the tokenizer
+tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+
+# Set padding token if not already set
+if tokenizer.pad_token is None:
+    tokenizer.pad_token = tokenizer.eos_token
+
+# Create the generator pipeline using the fine-tuned model and tokenizer
+generator = pipeline('text-generation', model=model, tokenizer=tokenizer)
+
+# Generate text
+result = generator('Sherlock Holmes says,')[0]
+print(result['generated_text'])
