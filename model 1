@@ -1,10 +1,7 @@
 # Step 1: Setup
 !pip install transformers[torch]
-
 !pip install datasets
 !pip install accelerate>=0.20.1
-
-
 
 # Step 2: Mount Google Drive to access your data (For Google Colab)
 from google.colab import drive
@@ -17,27 +14,23 @@ dataset = load_dataset('text', data_files={'train': '/content/drive/MyDrive/sher
 dataset = dataset["train"].train_test_split(test_size=0.1)
 
 # Step 4: Tokenization
-from transformers import GPT2TokenizerFast
-tokenizer = GPT2TokenizerFast.from_pretrained('gpt2')
+from transformers import AutoTokenizer
+tokenizer = AutoTokenizer.from_pretrained('gpt3')
 
 # Set padding token if not already set
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
 
 def tokenize_function(examples):
-    # Note that here 'text' represents the column name in your dataset containing the text
-    tokenized_examples = tokenizer(examples["text"], truncation=True, padding='max_length')
-
-    # For language modeling, labels are the same as inputs except for special tokens
+    tokenized_examples = tokenizer(examples["text"], truncation=True, padding='max_length', max_length=512)
     tokenized_examples["labels"] = tokenized_examples["input_ids"].copy()
-
     return tokenized_examples
 
 dataset = dataset.map(tokenize_function, batched=True)
 
 # Step 5: Model Preparation
-from transformers import GPT2LMHeadModel
-model = GPT2LMHeadModel.from_pretrained('gpt2')
+from transformers import AutoModelForCausalLM
+model = AutoModelForCausalLM.from_pretrained('gpt3')
 
 # Step 6: Training
 from transformers import TrainingArguments, Trainer
@@ -47,10 +40,11 @@ warnings.filterwarnings("ignore", category=UserWarning, module="transformers")
 training_args = TrainingArguments(
     output_dir="./results",
     overwrite_output_dir=True,
-    num_train_epochs=3,
-    per_device_train_batch_size=1,
+    num_train_epochs=5,
+    per_device_train_batch_size=4,
     save_steps=10_000,
     save_total_limit=2,
+    evaluation_strategy="epoch",
 )
 
 trainer = Trainer(
@@ -63,16 +57,16 @@ trainer = Trainer(
 trainer.train()
 
 # Save the model with a new name
-trainer.save_model("/content/drive/MyDrive/my_new_model_tuned")
+trainer.save_model("/content/drive/MyDrive/Sherlock_model")
 
 # Step 7: Testing
-from transformers import GPT2LMHeadModel, GPT2Tokenizer, pipeline
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 
 # Load the fine-tuned model
-model = GPT2LMHeadModel.from_pretrained('/content/drive/MyDrive/my_new_model_tuned')
+model = AutoModelForCausalLM.from_pretrained('/content/drive/MyDrive/new_Sherlock_model')
 
 # Load the tokenizer
-tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+tokenizer = AutoTokenizer.from_pretrained('gpt3')
 
 # Set padding token if not already set
 if tokenizer.pad_token is None:
